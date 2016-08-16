@@ -224,14 +224,17 @@ int bts_main(int argc, char **argv)
 
 	printf("((*))\n  |\n / \\ OsmoBTS\n");
 
+	// init talloc contexts
 	tall_bts_ctx = talloc_named_const(NULL, 1, "OsmoBTS context");
 	tall_msgb_ctx = talloc_pool(tall_bts_ctx, 100*1024);
 	msgb_set_talloc_ctx(tall_msgb_ctx);
 
 	bts_log_init(NULL);
 
+	// parse and handle commandline arguments
 	handle_options(argc, argv);
 
+	// allocate and init bts and trx structures
 	bts = gsm_bts_alloc(tall_bts_ctx);
 	if (!bts) {
 		fprintf(stderr, "Failed to create BTS structure\n");
@@ -244,6 +247,8 @@ int bts_main(int argc, char **argv)
 			exit(1);
 		}
 	}
+
+	// init vty interface
 	vty_init(&bts_vty_info);
 	e1inp_vty_init();
 	bts_vty_init(bts, &bts_log_info);
@@ -262,7 +267,8 @@ int bts_main(int argc, char **argv)
 		}
 	}
 
-        if (gsmtap_ip) {
+	// init gsmtap if specified in config
+	if (gsmtap_ip) {
 		gsmtap = gsmtap_source_init(gsmtap_ip, GSMTAP_UDP_PORT, 1);
 		if (!gsmtap) {
 			fprintf(stderr, "Failed during gsmtap_init()\n");
@@ -271,14 +277,17 @@ int bts_main(int argc, char **argv)
 		gsmtap_source_add_sink(gsmtap);
 	}
 
+	// init bts and transceiver structure
 	if (bts_init(bts) < 0) {
 		fprintf(stderr, "unable to open bts\n");
 		exit(1);
 	}
 	btsb = bts_role_bts(bts);
 
+	// init abis interface to bsc
 	abis_init(bts);
 
+	// pretty much magic. parse config and init vars and structure according to it.
 	rc = vty_read_config_file(config_file, NULL);
 	if (rc < 0) {
 		fprintf(stderr, "Failed to parse the config file: '%s'\n",
@@ -286,6 +295,7 @@ int bts_main(int argc, char **argv)
 		exit(1);
 	}
 
+	// some config error checking
 	if (!phy_link_by_num(0)) {
 		fprintf(stderr, "You need to configure at least phy0\n");
 		exit(1);
@@ -303,28 +313,33 @@ int bts_main(int argc, char **argv)
 
 	bts_controlif_setup(bts);
 
+	// init telnet vty interface
 	rc = telnet_init(tall_bts_ctx, NULL, g_vty_port_num);
 	if (rc < 0) {
 		fprintf(stderr, "Error initializing telnet\n");
 		exit(1);
 	}
 
+	// init the unix domain socket for ipc with pcu
 	if (pcu_sock_init(btsb->pcu.sock_path)) {
 		fprintf(stderr, "PCU L1 socket failed\n");
 		exit(1);
 	}
 
+	// Init signal handlers e.g. ctrl+c -> kill -2 <pid>
 	signal(SIGINT, &signal_handler);
 	//signal(SIGABRT, &signal_handler);
 	signal(SIGUSR1, &signal_handler);
 	signal(SIGUSR2, &signal_handler);
 	osmo_init_ignore_signals();
 
+	// check if bsc ip adress is set in config
 	if (!btsb->bsc_oml_host) {
 		fprintf(stderr, "Cannot start BTS without knowing BSC OML IP\n");
 		exit(1);
 	}
 
+	// connect to bsc and open abis interface
 	line = abis_open(bts, btsb->bsc_oml_host, "sysmoBTS");
 	if (!line) {
 		fprintf(stderr, "unable to connect to BSC\n");

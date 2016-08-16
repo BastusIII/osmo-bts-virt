@@ -44,8 +44,10 @@
 
 extern void *tall_bts_ctx;
 
-
-
+/**
+ * Send a message over the virtual um interface.
+ * This will at first wrap the msg with a gsmtap header and then write it to the declared multicast socket.
+ */
 static void tx_to_virt_um(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 			  enum trx_chan_type chan, struct msgb *msg)
 {
@@ -101,6 +103,7 @@ ubit_t *tx_data_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 		return NULL;
 
 	/* get mac block from queue */
+	// what queue is that and who does fill it?
 	msg = _sched_dequeue_prim(l1t, tn, fn, chan);
 	if (msg)
 		goto got_msg;
@@ -122,6 +125,7 @@ got_msg:
 		goto no_msg;
 	}
 
+	// transmit the msg received on dl from bsc to layer1 (virt um)
 	tx_to_virt_um(l1t, tn, fn, chan, msg);
 
 	return NULL;
@@ -526,19 +530,27 @@ static int vbts_sched_fn(struct gsm_bts *bts, uint32_t fn)
 	struct gsm_bts_trx *trx;
 
 	/* send time indication */
+	// update model  with new frame number, lot of stuff happening, mesurements of timeslots
+	// saving gsm time in bts model, and more
 	l1if_mph_time_ind(bts, fn);
 
 	/* advance the frame number? */
-
+	// is this the time advance functionality that depends of the distance to the ms???
 	llist_for_each_entry(trx, &bts->trx_list, list) {
 		struct phy_instance *pinst = trx_phy_instance(trx);
 		struct l1sched_trx *l1t = &pinst->u.virt.sched;
 		int tn;
-
+		// do for each of the 8 timeslots
 		for (tn = 0; tn < ARRAY_SIZE(l1t->ts); tn++) {
-			/* Generate RTS.ind to higher layers */
+			/* Generate RTS indication to higher layers */
+			// ST: This will basically do 2 things (check l1_if:bts_model_l1sap_down):
+			// 1) Get pending messages from layer 2 (from the lapdm queue)
+			// 2) Process the messages
+			//    --> Handle and process non-transparent RSL-Messages (activate channel, )
+			//    --> Forward transparent RSL-DATA-Messages to the ms by appending them to the l1-dl-queue
 			_sched_rts(l1t, tn, (fn + RTS_ADVANCE) % GSM_HYPERFRAME);
 			/* schedule transmit backend functions */
+			// ST: Process data in the l1-dlqueue and forward it to ms
 			_sched_dl_burst(l1t, tn, fn);
 		}
 	}
@@ -556,24 +568,33 @@ static void vbts_fn_timer_cb(void *data)
 
 	gettimeofday(&tv_now, NULL);
 
+	// check how much time elapsed till the last timer callback call
+	// this value should be about 4.615 ms (a bit greater) as this is the scheduling interval
 	elapsed_us = (tv_now.tv_sec - tv_clock->tv_sec) * 1000000 +
 		     (tv_now.tv_usec - tv_clock->tv_usec);
 
+	// not so good somehow a lot of time passed between two timer callbacks
 	if (elapsed_us > 2*FRAME_DURATION_uS)
 		LOGP(DL1P, LOGL_NOTICE, "vbts_fn_timer_cb after %d us\n", elapsed_us);
 
+	// schedule the current frame/s (fn = frame number)
+	// this loop will be called at least once, but can also be executed
+	// multiple times if more than one frame duration (4615us) passed till the last callback
 	while (elapsed_us > FRAME_DURATION_uS / 2) {
 		const struct timeval tv_frame = {
 			.tv_sec = 0,
 			.tv_usec = FRAME_DURATION_uS,
 		};
 		timeradd(tv_clock, &tv_frame, tv_clock);
+		// increment the frame number in the bts model instance
 		btsb->vbts.last_fn = (btsb->vbts.last_fn + 1) % GSM_HYPERFRAME;
 		vbts_sched_fn(bts, btsb->vbts.last_fn);
 		elapsed_us -= FRAME_DURATION_uS;
 	}
 
 	/* re-schedule the timer */
+	// timer is set to frame duration - elapsed time to guarantee that this cb method will be
+	// periodically executed every 4.615ms
 	osmo_timer_schedule(&btsb->vbts.fn_timer, 0, FRAME_DURATION_uS - elapsed_us);
 }
 
@@ -588,6 +609,7 @@ int vbts_sched_start(struct gsm_bts *bts)
 	btsb->vbts.fn_timer.data = bts;
 
 	gettimeofday(&btsb->vbts.tv_clock, NULL);
+	// trigger the first timer after 4615us (a frame duration)
 	osmo_timer_schedule(&btsb->vbts.fn_timer, 0, FRAME_DURATION_uS);
 
 	return 0;

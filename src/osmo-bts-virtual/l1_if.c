@@ -40,9 +40,16 @@
 
 #include "virtual_um.h"
 
+
+/**
+ * Callback to handle incoming messages from the MS.
+ * The incoming message should be GSM_TAP encapsulated.
+ */
 static void virt_um_rcv_cb(struct virt_um_inst *vui, struct msgb *msg)
 {
 	/* FIXME: Handle msg from MS */
+	// ich hab hier die komplette vui instance, da müsst ich eientlich alles notwendige rauskriegen können
+	LOGP(DMEAS, LOGL_ERROR, "Message incoming: %s\n", msg->data);
 }
 
 
@@ -52,6 +59,7 @@ int bts_model_oml_estab(struct gsm_bts *bts)
 	return 0;
 }
 
+/* called by bts_main to initialize physical link */
 int bts_model_phy_link_open(struct phy_link *plink)
 {
 	struct phy_instance *pinst;
@@ -76,6 +84,8 @@ int bts_model_phy_link_open(struct phy_link *plink)
 	 * scheduler */
 	llist_for_each_entry(pinst, &plink->instances, list) {
 		trx_sched_init(&pinst->u.virt.sched, pinst->trx);
+		/* TODO: why only start scheduler for CCCH */
+		/* Only start the scheduler for the transceiver on c0. CCCH is on C0 */
 		if (pinst->trx == pinst->trx->bts->c0)
 			vbts_sched_start(pinst->trx->bts);
 	}

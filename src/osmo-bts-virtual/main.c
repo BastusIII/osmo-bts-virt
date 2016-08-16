@@ -101,6 +101,25 @@ void bts_model_abis_close(struct gsm_bts *bts)
 	bts_shutdown(bts, "Abis close");
 }
 
+void bts_model_phy_link_set_defaults(struct phy_link *plink)
+{
+}
+
+void bts_model_phy_instance_set_defaults(struct phy_instance *pinst)
+{
+}
+
+int bts_model_ts_disconnect(struct gsm_bts_trx_ts *ts)
+{
+	return -ENOTSUP;
+}
+
+int bts_model_ts_connect(struct gsm_bts_trx_ts *ts,
+			 enum gsm_phys_chan_config as_pchan)
+{
+	return -ENOTSUP;
+}
+
 int main(int argc, char **argv)
 {
 	return bts_main(argc, argv);
