@@ -158,6 +158,9 @@ const struct trx_chan_desc trx_chan_desc[_TRX_CHAN_MAX] = {
 
 
 /*
+ * l1t = physical instance scheduler instance
+ * trx transceiver handled by the scheduler
+ *
  * init / exit
  */
 

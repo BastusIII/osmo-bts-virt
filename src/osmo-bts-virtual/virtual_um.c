@@ -116,21 +116,31 @@ static int mcast_connect(int fd, const char *group, uint16_t port)
 
 	return rc;
 }
-
+/**
+ * Virtual UM interface file descriptor callback.
+ * Should be called by select.c when the fd is ready for reading.
+ */
 static int virt_um_fd_cb(struct osmo_fd *ofd, unsigned int what)
 {
 	struct virt_um_inst *vui = ofd->data;
 
+	// check if the read flag is set
 	if (what & BSC_FD_READ) {
+		// allocate message buffer of specified size
 		struct msgb *msg = msgb_alloc(VIRT_UM_MSGB_SIZE, "Virtual UM Rx");
 		int rc;
 
+		// read message from fd in message buffer
 		rc = read(ofd->fd, msgb_data(msg), msgb_tailroom(msg));
+		// rc is number of bytes actually read
 		if (rc > 0) {
 			msgb_put(msg, rc);
+			// call the l1 callback function for a received msg
 			vui->recv_cb(vui, msg);
 		} else {
+			// call the l1 callback function for a received msg of length 0
 			vui->recv_cb(vui, NULL);
+			// Unregister fd from select loop
 			osmo_fd_unregister(ofd);
 			close(ofd->fd);
 			ofd->fd = -1;
@@ -156,8 +166,9 @@ struct virt_um_inst *virt_um_init(void *ctx, const char *group, uint16_t port,
 	/* crate a socked and bind it to the multicast group. Do NOT
 	 * specify a fixed port locally, to make stack choose a random
 	 * free UDP port. */
+	/* also listens to incoming connections */
 	fd = osmo_sock_init(AF_UNSPEC, SOCK_DGRAM, IPPROTO_UDP, group,
-			    0, OSMO_SOCK_F_BIND);
+			    port, OSMO_SOCK_F_BIND);
 	if (fd < 0)
 		return NULL;
 
@@ -169,11 +180,12 @@ struct virt_um_inst *virt_um_init(void *ctx, const char *group, uint16_t port,
 	}
 
 	/* and finally also connect */
-	rc = mcast_connect(fd, group, port);
-	if (rc < 0) {
-		close(fd);
-		return NULL;
-	}
+	// This does not work with a multicast socket
+//	rc = mcast_connect(fd, group, port);
+//	if (rc < 0) {
+//		close(fd);
+//		return NULL;
+//	}
 
 	vui = talloc_zero(ctx, struct virt_um_inst);
 	vui->priv = priv;
@@ -200,6 +212,9 @@ void virt_um_destroy(struct virt_um_inst *vui)
 	talloc_free(vui);
 }
 
+/**
+ * write msg to to multicast socket and free msg afterwards
+ */
 int virt_um_write_msg(struct virt_um_inst *vui, struct msgb *msg)
 {
 	int rc;
