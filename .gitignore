@@ -70,3 +70,7 @@ debian/*.substvars
 debian/osmo-bts-trx-dbg/
 debian/osmo-bts-trx/
 debian/tmp/
+/.autotools
+/.cproject
+/.project
+/.settings/
