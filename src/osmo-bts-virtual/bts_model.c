@@ -45,14 +45,26 @@ int bts_model_adjst_ms_pwr(struct gsm_lchan *lchan)
 }
 
 int bts_model_check_oml(struct gsm_bts *bts, uint8_t msg_type,
-			struct tlv_parsed *old_attr, struct tlv_parsed *new_attr,
-			void *obj)
+                        struct tlv_parsed *old_attr,
+                        struct tlv_parsed *new_attr, void *obj)
 {
 	return 0;
 }
 
 static uint8_t vbts_set_bts(struct gsm_bts *bts)
 {
+	struct gsm_bts_trx *trx;
+	uint8_t tn;
+
+	llist_for_each_entry(trx, &bts->trx_list, list)
+	{
+		oml_mo_state_chg(&trx->mo, NM_OPSTATE_DISABLED, NM_AVSTATE_OK);
+		oml_mo_state_chg(&trx->bb_transc.mo, -1, NM_AVSTATE_OK);
+		for (tn = 0; tn < TRX_NR_TS; tn++) {
+			oml_mo_state_chg(&trx->ts[tn].mo, NM_OPSTATE_DISABLED,
+			                NM_AVSTATE_DEPENDENCY);
+		}
+	}
 	return 0;
 }
 
@@ -74,27 +86,27 @@ static uint8_t vbts_set_ts(struct gsm_bts_trx_ts *ts)
 }
 
 int bts_model_apply_oml(struct gsm_bts *bts, struct msgb *msg,
-			struct tlv_parsed *new_attr, int kind, void *obj)
+                        struct tlv_parsed *new_attr, int kind, void *obj)
 {
 	struct abis_om_fom_hdr *foh = msgb_l3(msg);
 	int cause = 0;
 
 	switch (foh->msg_type) {
-	case NM_MT_SET_BTS_ATTR:
+	case NM_MT_SET_BTS_ATTR: // 0x41
 		cause = vbts_set_bts(obj);
 		break;
 	case NM_MT_SET_RADIO_ATTR:
-		cause = vbts_set_trx(obj);
+		cause = vbts_set_trx(obj); // 0x44
 		break;
-	case NM_MT_SET_CHAN_ATTR:
+	case NM_MT_SET_CHAN_ATTR: // 0x47
 		cause = vbts_set_ts(obj);
 		break;
 	}
 	return oml_fom_ack_nack(msg, cause);
 }
 
-int bts_model_opstart(struct gsm_bts *bts, struct gsm_abis_mo *mo,
-		      void *obj)
+// mo: the maintenance object
+int bts_model_opstart(struct gsm_bts *bts, struct gsm_abis_mo *mo, void *obj)
 {
 	int rc;
 
@@ -105,6 +117,13 @@ int bts_model_opstart(struct gsm_bts *bts, struct gsm_abis_mo *mo,
 		rc = oml_mo_opstart_ack(mo);
 		break;
 	case NM_OC_BTS:
+		oml_mo_state_chg(mo, NM_OPSTATE_ENABLED, -1);
+		rc = oml_mo_opstart_ack(mo);
+		oml_mo_state_chg(&bts->mo, -1, NM_AVSTATE_OK);
+		oml_mo_state_chg(&bts->gprs.nse.mo, -1, NM_AVSTATE_OK);
+		oml_mo_state_chg(&bts->gprs.cell.mo, -1, NM_AVSTATE_OK);
+		oml_mo_state_chg(&bts->gprs.nsvc[0].mo, -1, NM_AVSTATE_OK);
+		break;
 	case NM_OC_SITE_MANAGER:
 	case NM_OC_BASEB_TRANSC:
 	case NM_OC_GPRS_NSE:
@@ -112,12 +131,6 @@ int bts_model_opstart(struct gsm_bts *bts, struct gsm_abis_mo *mo,
 	case NM_OC_GPRS_NSVC:
 		oml_mo_state_chg(mo, NM_OPSTATE_ENABLED, -1);
 		rc = oml_mo_opstart_ack(mo);
-		if (mo->obj_class == NM_OC_BTS) {
-			oml_mo_state_chg(&bts->mo, -1, NM_AVSTATE_OK);
-			oml_mo_state_chg(&bts->gprs.nse.mo, -1, NM_AVSTATE_OK);
-			oml_mo_state_chg(&bts->gprs.cell.mo, -1, NM_AVSTATE_OK);
-			oml_mo_state_chg(&bts->gprs.nsvc[0].mo, -1, NM_AVSTATE_OK);
-		}
 		break;
 	default:
 		rc = oml_mo_opstart_nack(mo, NM_NACK_OBJCLASS_NOTSUPP);
@@ -126,7 +139,7 @@ int bts_model_opstart(struct gsm_bts *bts, struct gsm_abis_mo *mo,
 }
 
 int bts_model_chg_adm_state(struct gsm_bts *bts, struct gsm_abis_mo *mo,
-			    void *obj, uint8_t adm_state)
+                            void *obj, uint8_t adm_state)
 {
 	mo->nm_state.administrative = adm_state;
 	return oml_mo_statechg_ack(mo);
@@ -136,7 +149,6 @@ int bts_model_trx_deact_rf(struct gsm_bts_trx *trx)
 {
 	return 0;
 }
-
 
 int bts_model_change_power(struct gsm_bts_trx *trx, int p_trxout_mdBm)
 {
