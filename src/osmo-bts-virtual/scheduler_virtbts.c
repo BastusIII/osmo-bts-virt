@@ -28,6 +28,7 @@
 #include <osmocom/core/talloc.h>
 #include <osmocom/core/bits.h>
 #include <osmocom/core/gsmtap_util.h>
+#include <osmocom/core/gsmtap.h>
 
 #include <osmocom/netif/rtp.h>
 
@@ -52,17 +53,26 @@ static void tx_to_virt_um(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 			  enum trx_chan_type chan, struct msgb *msg)
 {
 	const struct trx_chan_desc *chdesc = &trx_chan_desc[chan];
-	uint8_t ss = 0; //FIXME(chdesc);
-	uint8_t gsmtap_chan;
+	uint8_t gsmtap_chan_type = chantype_rsl2gsmtap(chdesc->chan_nr, chdesc->link_id); // the logical channel type
+	uint8_t timeslot = tn; // indicates the physical channel
+	uint8_t subslot = 0; // indicates the logical channel subslot on the physical channel FIXME: calculate
+	int8_t signal_dbm = 0; // the signal strength is not needed in virt phy
+	uint8_t signal_snr = 0; // the signal to noice ratio is not needed in virt phy
+	uint8_t *data = msgb_l2(msg); // data bits to transmit (whole message without l1 header)
+	uint8_t data_len = msgb_l2len(msg);
 	struct msgb *outmsg;
 
-	gsmtap_chan = chantype_rsl2gsmtap(chdesc->chan_nr, chdesc->link_id);
-	outmsg = gsmtap_makemsg(l1t->trx->arfcn, tn, gsmtap_chan, ss, fn,
-				0, 0, msgb_l2(msg), msgb_l2len(msg));
+	// TODO: encrypt and encode message data
+
+	outmsg = gsmtap_makemsg(l1t->trx->arfcn, timeslot, gsmtap_chan_type, subslot, fn,
+			signal_dbm, signal_snr, data, data_len);
 	if (outmsg) {
 		struct phy_instance *pinst = trx_phy_instance(l1t->trx);
 		struct virt_um_inst *virt_um = pinst->phy_link->u.virt.virt_um;
-		virt_um_write_msg(virt_um, outmsg);
+		if (virt_um_write_msg(virt_um, outmsg) == -1) {
+			struct gsmtap_hdr *gh = (struct gsmtap_hdr *) msgb_data(outmsg);
+			LOGP(DL1C, LOGL_ERROR, "Message could not be written to virtual UM! arfcn = %u gsmtap_chan=%u fn=%u ts=%u\n", gh->arfcn, gh->type, gh->frame_number,gh->timeslot);
+		}
 	}
 
 	/* free message */
@@ -540,6 +550,7 @@ static int vbts_sched_fn(struct gsm_bts *bts, uint32_t fn)
 		struct phy_instance *pinst = trx_phy_instance(trx);
 		struct l1sched_trx *l1t = &pinst->u.virt.sched;
 		int tn;
+		const ubit_t *bits;
 		// do for each of the 8 timeslots
 		for (tn = 0; tn < ARRAY_SIZE(l1t->ts); tn++) {
 			/* Generate RTS indication to higher layers */
@@ -551,7 +562,9 @@ static int vbts_sched_fn(struct gsm_bts *bts, uint32_t fn)
 			_sched_rts(l1t, tn, (fn + RTS_ADVANCE) % GSM_HYPERFRAME);
 			/* schedule transmit backend functions */
 			// ST: Process data in the l1-dlqueue and forward it to ms
-			_sched_dl_burst(l1t, tn, fn);
+			// the returned bits are not used here, the routines called will directly forward their bits to the virt um
+			bits = _sched_dl_burst(l1t, tn, fn);
+
 		}
 	}
 

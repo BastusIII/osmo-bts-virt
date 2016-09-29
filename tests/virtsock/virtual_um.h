@@ -5,6 +5,10 @@
 #include "osmo_mcast_sock.h"
 
 #define VIRT_UM_MSGB_SIZE	256
+#define DEFAULT_MS_MCAST_GROUP "224.0.0.1"
+#define DEFAULT_MS_MCAST_PORT 6666
+#define DEFAULT_BTS_MCAST_GROUP "225.0.0.1"
+#define DEFAULT_BTS_MCAST_PORT 6667
 
 struct virt_um_inst {
 	void *priv;
