@@ -65,17 +65,17 @@ void bts_model_config_write_phy(struct vty *vty, struct phy_link *plink)
 		vty_out(vty, " virtual-um net-device %s%s",
 			plink->u.virt.mcast_dev, VTY_NEWLINE);
 	if (plink->u.virt.ms_mcast_group)
-		vty_out(vty, " MS virtual-um multicast-group %s%s",
+		vty_out(vty, " virtual-um ms-multicast-group %s%s",
 			plink->u.virt.ms_mcast_group, VTY_NEWLINE);
 	if (plink->u.virt.ms_mcast_port)
-		vty_out(vty, " MS virtual-um udp-port %u%s",
+		vty_out(vty, " virtual-um ms-udp-port %u%s",
 			plink->u.virt.ms_mcast_port, VTY_NEWLINE);
 	if (plink->u.virt.bts_mcast_group)
-			vty_out(vty, " BTS virtual-um multicast-group %s%s",
-				plink->u.virt.ms_mcast_group, VTY_NEWLINE);
+			vty_out(vty, " virtual-um bts-multicast-group %s%s",
+				plink->u.virt.bts_mcast_group, VTY_NEWLINE);
 	if (plink->u.virt.bts_mcast_port)
-		vty_out(vty, " BTS virtual-um udp-port %u%s",
-			plink->u.virt.ms_mcast_port, VTY_NEWLINE);
+		vty_out(vty, " virtual-um bts-udp-port %u%s",
+			plink->u.virt.bts_mcast_port, VTY_NEWLINE);
 
 }
 

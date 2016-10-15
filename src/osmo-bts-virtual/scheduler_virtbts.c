@@ -29,6 +29,7 @@
 #include <osmocom/core/bits.h>
 #include <osmocom/core/gsmtap_util.h>
 #include <osmocom/core/gsmtap.h>
+#include <osmocom/gsm/rsl.h>
 
 #include <osmocom/netif/rtp.h>
 
@@ -53,18 +54,20 @@ static void tx_to_virt_um(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 			  enum trx_chan_type chan, struct msgb *msg)
 {
 	const struct trx_chan_desc *chdesc = &trx_chan_desc[chan];
-	uint8_t gsmtap_chan_type = chantype_rsl2gsmtap(chdesc->chan_nr, chdesc->link_id); // the logical channel type
-	uint8_t timeslot = tn; // indicates the physical channel
-	uint8_t subslot = 0; // indicates the logical channel subslot on the physical channel FIXME: calculate
-	int8_t signal_dbm = 0; // the signal strength is not needed in virt phy
-	uint8_t signal_snr = 0; // the signal to noice ratio is not needed in virt phy
+	uint8_t chan_type, timeslot, subslot, signal_dbm, signal_snr;
+	rsl_dec_chan_nr(chdesc->chan_nr, &chan_type, &subslot, &timeslot);
+	chan_type = chantype_rsl2gsmtap(chan_type, chdesc->link_id); // the logical channel type
+	//uint8_t timeslot = tn; // indicates the physical channel
+	//uint8_t subslot = 0; // indicates the logical channel subslot on the physical channel FIXME: calculate
+	signal_dbm = 63; // the signal strength is not needed in virt phy
+	signal_snr = 40; // the signal to noice ratio is not needed in virt phy
 	uint8_t *data = msgb_l2(msg); // data bits to transmit (whole message without l1 header)
 	uint8_t data_len = msgb_l2len(msg);
 	struct msgb *outmsg;
 
 	// TODO: encrypt and encode message data
 
-	outmsg = gsmtap_makemsg(l1t->trx->arfcn, timeslot, gsmtap_chan_type, subslot, fn,
+	outmsg = gsmtap_makemsg(l1t->trx->arfcn, timeslot, chan_type, subslot, fn,
 			signal_dbm, signal_snr, data, data_len);
 	if (outmsg) {
 		struct phy_instance *pinst = trx_phy_instance(l1t->trx);
