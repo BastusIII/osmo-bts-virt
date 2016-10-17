@@ -88,25 +88,25 @@ static void tx_to_virt_um(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 
 /* an IDLE burst returns nothing. on C0 it is replaced by dummy burst */
 ubit_t *tx_idle_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	return NULL;
 }
 
 ubit_t *tx_fcch_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	return NULL;
 }
 
 ubit_t *tx_sch_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	return NULL;
 }
 
 ubit_t *tx_data_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	struct l1sched_ts *l1ts = l1sched_trx_get_ts(l1t, tn);
 	struct gsm_bts_trx_ts *ts = &l1t->trx->ts[tn];
@@ -145,7 +145,7 @@ got_msg:
 }
 
 ubit_t *tx_pdtch_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	struct l1sched_ts *l1ts = l1sched_trx_get_ts(l1t, tn);
 	struct gsm_bts_trx_ts *ts = &l1t->trx->ts[tn];
@@ -405,7 +405,7 @@ send_frame:
 }
 
 ubit_t *tx_tchf_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	struct msgb *msg_tch = NULL, *msg_facch = NULL;
 	struct l1sched_ts *l1ts = l1sched_trx_get_ts(l1t, tn);
@@ -439,7 +439,7 @@ send_burst:
 }
 
 ubit_t *tx_tchh_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid)
+	enum trx_chan_type chan, uint8_t bid, uint16_t *nbits)
 {
 	struct msgb *msg_tch = NULL, *msg_facch = NULL;
 	struct l1sched_ts *l1ts = l1sched_trx_get_ts(l1t, tn);
@@ -492,7 +492,7 @@ send_burst:
  * towards receiving bursts */
 
 int rx_rach_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, int8_t rssi,
+	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, uint16_t nbits, int8_t rssi,
 	float toa)
 {
 	return 0;
@@ -500,28 +500,28 @@ int rx_rach_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
 
 /*! \brief a single burst was received by the PHY, process it */
 int rx_data_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, int8_t rssi,
+	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, uint16_t nbits, int8_t rssi,
 	float toa)
 {
 	return 0;
 }
 
 int rx_pdtch_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, int8_t rssi,
+	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, uint16_t nbits, int8_t rssi,
 	float toa)
 {
 	return 0;
 }
 
 int rx_tchf_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, int8_t rssi,
+	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, uint16_t nbits, int8_t rssi,
 	float toa)
 {
 	return 0;
 }
 
 int rx_tchh_fn(struct l1sched_trx *l1t, uint8_t tn, uint32_t fn,
-	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, int8_t rssi,
+	enum trx_chan_type chan, uint8_t bid, sbit_t *bits, uint16_t nbits, int8_t rssi,
 	float toa)
 {
 	return 0;
@@ -541,6 +541,7 @@ void _sched_act_rach_det(struct l1sched_trx *l1t, uint8_t tn, uint8_t ss, int ac
 static int vbts_sched_fn(struct gsm_bts *bts, uint32_t fn)
 {
 	struct gsm_bts_trx *trx;
+	uint16_t nbits;
 
 	/* send time indication */
 	// update model  with new frame number, lot of stuff happening, mesurements of timeslots
@@ -566,7 +567,7 @@ static int vbts_sched_fn(struct gsm_bts *bts, uint32_t fn)
 			/* schedule transmit backend functions */
 			// ST: Process data in the l1-dlqueue and forward it to ms
 			// the returned bits are not used here, the routines called will directly forward their bits to the virt um
-			bits = _sched_dl_burst(l1t, tn, fn);
+			bits = _sched_dl_burst(l1t, tn, fn, &nbits);
 
 		}
 	}
